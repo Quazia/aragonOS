@@ -1,0 +1,29 @@
+pragma solidity 0.4.18;
+
+import "../../contracts/common/erc777/ITokenRecipient.sol";
+
+contract EthWrapRecipient is ITokenRecipient {
+    address public mToken;
+    address public mFrom;
+    address public mTo;
+    address public mOperator;
+    uint256 public mAmount;
+    bytes public mData;
+
+    function tokensReceived(
+        address from,
+        address to,
+        uint amount,
+        bytes userData,
+        address operator,
+        bytes operatorData
+    ) public {
+        mToken = msg.sender;
+        mFrom = from;
+        mAmount = amount;
+        mData = operatorData;
+        mTo = to;
+        mOperator = operator;
+    };
+
+}
