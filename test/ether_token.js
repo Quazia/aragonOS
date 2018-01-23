@@ -1,13 +1,23 @@
 const { assertRevert } = require('./helpers/assertThrow')
 const { getBalance } = require('./helpers/web3')
+const { TokenableContractsRegistry } = require('../helpers/tokenableContractsRegistry')
 const EtherToken = artifacts.require('EtherToken')
-const ERC677Stub = artifacts.require('ERC677Stub')
+const ERC777Stub = artifacts.require('ERC777Stub')
+const EIP820 = require('eip820');
+const Web3 = require('web3');
+
 
 contract('EtherToken', accounts => {
   let token = {}
+  let interfaceImplementationRegistry
   const value = 1000
   const from = accounts[0]
   const withdrawAddr = '0x0000000000000000000000000000000000001234'
+
+  before( async () => {
+    interfaceImplementationRegistry = await EIP820.deploy(web3, accounts[0])
+    tokenableContractsRegistry = await TokenableContractsRegistry.new(web3);
+  })
 
   beforeEach(async () => {
     token = await EtherToken.new()
@@ -20,9 +30,10 @@ contract('EtherToken', accounts => {
   })
 
   it('can wrap and call', async () => {
-      const stub = await ERC677Stub.new()
+      const stub = await EthWrapStub.new()
       const data = '0x12'
 
+      // Check this
       await token.wrapAndCall(stub.address, data, { from, value })
 
       assert.equal(await stub.token(), token.address, 'token should be correct')
@@ -63,10 +74,12 @@ contract('EtherToken', accounts => {
       })
 
       it('can transfer and call', async () => {
-          const stub = await ERC677Stub.new()
+          const stub = await ERC777Stub.new()
           const data = '0x12'
 
-          await token.transferAndCall(stub.address, value, data, { from })
+          
+
+          await token.send(stub.address, value, data, { from })
 
           assert.equal(await stub.token(), token.address, 'token should be correct')
           assert.equal(await stub.from(), from, 'from should be correct')
