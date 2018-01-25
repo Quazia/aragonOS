@@ -9,17 +9,17 @@
 ///  This contract does not define any standard, but can be taken as a reference
 ///  implementation in case of any ambiguity into the standard
 
-pragma solidity ^0.4.19; // solhint-disable-line compiler-fixed
+pragma solidity ^0.4.18; // solhint-disable-line compiler-fixed
 
-import "../node_modules/eip820/contracts/EIP820.sol";
-import "../node_modules/giveth-common-contracts/contracts/Owned.sol";
-import "../node_modules/giveth-common-contracts/contracts/SafeMath.sol";
+import "../eip820/EIP820.sol";
+import "../Owned.sol";
+import "../../zeppelin/math/SafeMath.sol";
 import "./Ierc20.sol";
 import "./Ierc777.sol";
 import "./ITokenRecipient.sol";
 import "./TokenableContractsRegistry.sol";
 
-contract ERC777 is Owned, Ierc20, Ierc777, EIP820 {
+contract ERC777 is Ierc777, Ierc20, Owned, EIP820 {
     using SafeMath for uint256;
 
     string private mName;
@@ -28,7 +28,6 @@ contract ERC777 is Owned, Ierc20, Ierc777, EIP820 {
     uint256 private mTotalSupply;
 
     bool private mErc20compatible;
-
     TokenableContractsRegistry public tokenableContractsRegistry;
 
     mapping(address => uint) private mBalances;
@@ -200,37 +199,6 @@ contract ERC777 is Owned, Ierc20, Ierc777, EIP820 {
         doSend(_from, _to, _value, _userData, msg.sender, _operatorData, true);
     }
 
-    /// @notice Burns `_value` tokens from `_tokenHolder`
-    ///  Sample burn function to showcase the use of the `Burnt` event.
-    /// @param _tokenHolder The address that will lose the tokens
-    /// @param _value The quantity of tokens to burn
-    function burn(address _tokenHolder, uint256 _value) public onlyOwner {
-        requireMultiple(_value);
-        require(balanceOf(_tokenHolder) >= _value);
-
-        mBalances[_tokenHolder] = mBalances[_tokenHolder].sub(_value);
-        mTotalSupply = mTotalSupply.sub(_value);
-
-        Burnt(_tokenHolder, _value);
-        if (mErc20compatible) { Transfer(_tokenHolder, 0x0, _value); }
-    }
-
-    /// @notice Generates `_value` tokens to be assigned to `_tokenHolder`
-    ///  Sample mint function to showcase the use of the `Minted` event and the logic to notify the recipient.
-    /// @param _tokenHolder The address that will be assigned the new tokens
-    /// @param _value The quantity of tokens generated
-    /// @param _operatorData Data that will be passed to the recipient as a first transfer
-    function ownerMint(address _tokenHolder, uint256 _value, bytes _operatorData) public onlyOwner {
-        requireMultiple(_value);
-        mTotalSupply = mTotalSupply.add(_value);
-        mBalances[_tokenHolder] = mBalances[_tokenHolder].add(_value);
-
-        callRecipent(0x0, _tokenHolder, _value, "", msg.sender, _operatorData, true);
-
-        Minted(_tokenHolder, _value, msg.sender, _operatorData);
-        if (mErc20compatible) { Transfer(0x0, _tokenHolder, _value); }
-    }
-
     /// @notice Internal function that ensures `_value` is multiple of the granularity
     /// @param _value The quantity that want's to be checked
     function requireMultiple(uint256 _value) internal {
@@ -287,8 +255,39 @@ contract ERC777 is Owned, Ierc20, Ierc777, EIP820 {
 
         callRecipent(_from, _to, _value, _userData, _operator, _operatorData, _preventLocking);
 
-        Sent(_from, _to, _value, _userData, _operator, _operatorData);
+        Sent(_from, _to, _value, _operator, _userData, _operatorData);
         if (mErc20compatible) { Transfer(_from, _to, _value); }
+    }
+
+    /// @notice Burns `_value` tokens from `_tokenHolder`
+    ///  Sample burn function to showcase the use of the `Burnt` event.
+    /// @param _tokenHolder The address that will lose the tokens
+    /// @param _value The quantity of tokens to burn
+    function burn(address _tokenHolder, uint256 _value) internal {
+        requireMultiple(_value);
+        require(balanceOf(_tokenHolder) >= _value);
+
+        mBalances[_tokenHolder] = mBalances[_tokenHolder].sub(_value);
+        mTotalSupply = mTotalSupply.sub(_value);
+        
+        Burnt(_tokenHolder, _value);
+        if (mErc20compatible) { Transfer(_tokenHolder, 0x0, _value); }
+    }
+
+    /// @notice Generates `_value` tokens to be assigned to `_tokenHolder`
+    ///  Sample mint function to showcase the use of the `Minted` event and the logic to notify the recipient.
+    /// @param _tokenHolder The address that will be assigned the new tokens
+    /// @param _value The quantity of tokens generated
+    /// @param _operatorData Data that will be passed to the recipient as a first transfer
+    function ownerMint(address _tokenHolder, uint256 _value, bytes _operatorData) internal {
+        requireMultiple(_value);
+        mTotalSupply = mTotalSupply.add(_value);
+        mBalances[_tokenHolder] = mBalances[_tokenHolder].add(_value);
+
+        callRecipent(0x0, _tokenHolder, _value, "", msg.sender, _operatorData, true);
+
+        Minted(_tokenHolder, _value, msg.sender, _operatorData);
+        if (mErc20compatible) { Transfer(0x0, _tokenHolder, _value); }
     }
 
     /// @notice Helper function that checks for ITokenRecipient on the recipient and calls it.

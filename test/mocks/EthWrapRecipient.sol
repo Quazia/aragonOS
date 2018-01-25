@@ -24,6 +24,6 @@ contract EthWrapRecipient is ITokenRecipient {
         mData = operatorData;
         mTo = to;
         mOperator = operator;
-    };
+    }
 
 }

@@ -1,10 +1,10 @@
 const { assertRevert } = require('./helpers/assertThrow')
 const { getBalance } = require('./helpers/web3')
-const { TokenableContractsRegistry } = require('../helpers/tokenableContractsRegistry')
+const TokenableContractsRegistry = artifacts.require('TokenableContractsRegistry');
 const EtherToken = artifacts.require('EtherToken')
-const ERC777Stub = artifacts.require('ERC777Stub')
-const EIP820 = require('eip820');
-const Web3 = require('web3');
+const EthWrapRecipient = artifacts.require('EthWrapRecipient')
+const EIP820 = artifacts.require('EIP820')
+const Web3 = require('web3')
 
 
 contract('EtherToken', accounts => {
@@ -15,7 +15,6 @@ contract('EtherToken', accounts => {
   const withdrawAddr = '0x0000000000000000000000000000000000001234'
 
   before( async () => {
-    interfaceImplementationRegistry = await EIP820.deploy(web3, accounts[0])
     tokenableContractsRegistry = await TokenableContractsRegistry.new(web3);
   })
 
@@ -74,7 +73,7 @@ contract('EtherToken', accounts => {
       })
 
       it('can transfer and call', async () => {
-          const stub = await ERC777Stub.new()
+          const stub = await EthWrapRecipient.new()
           const data = '0x12'
 
           
