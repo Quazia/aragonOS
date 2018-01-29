@@ -1,6 +1,6 @@
 pragma solidity 0.4.18;
 
-import "../../contracts/common/erc777/ITokenRecipient.sol";
+import "../../contracts/lib/erc777/ITokenRecipient.sol";
 
 contract EthWrapRecipient is ITokenRecipient {
     address public mToken;

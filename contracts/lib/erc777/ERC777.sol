@@ -13,7 +13,7 @@ pragma solidity ^0.4.18; // solhint-disable-line compiler-fixed
 
 import "../eip820/EIP820.sol";
 import "../Owned.sol";
-import "../../zeppelin/math/SafeMath.sol";
+import "../zeppelin/math/SafeMath.sol";
 import "./Ierc20.sol";
 import "./Ierc777.sol";
 import "./ITokenRecipient.sol";

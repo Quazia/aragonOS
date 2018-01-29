@@ -1,6 +1,6 @@
 pragma solidity 0.4.18;
 
-import "./erc777/ERC777.sol";
+import "../lib/erc777/ERC777.sol";
 
 contract EtherToken is ERC777 {
 
