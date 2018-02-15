@@ -5,6 +5,7 @@ contract InterfaceImplementationRegistry {
     mapping (address => mapping(bytes32 => address)) interfaces;
     mapping (address => address) public managers;
 
+    // Keep in mind by default only the contract itself can manage the registry
     modifier canManage(address addr) {
         require(msg.sender == addr || msg.sender == managers[addr]);
         _;

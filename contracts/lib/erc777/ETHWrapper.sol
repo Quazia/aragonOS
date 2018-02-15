@@ -19,13 +19,15 @@ import "./Ierc777.sol";
 import "./ITokenRecipient.sol";
 import "./TokenableContractsRegistry.sol";
 
-contract ERC777 is Ierc777, Ierc20, Owned, EIP820 {
+contract ETHWrapper is Ierc777, Ierc20, Owned, EIP820 {
     using SafeMath for uint256;
 
     string private mName;
     string private mSymbol;
     uint256 private mGranularity;
     uint256 private mTotalSupply;
+    uint256 private etherSupply;
+
 
     bool private mErc20compatible;
     TokenableContractsRegistry public tokenableContractsRegistry;
@@ -253,7 +255,7 @@ contract ERC777 is Ierc777, Ierc20, Owned, EIP820 {
         mBalances[_from] = mBalances[_from].sub(_value);
         mBalances[_to] = mBalances[_to].add(_value);
 
-        callRecipent(_from, _to, _value, _userData, _operator, _operatorData, _preventLocking);
+        callRecipient(_from, _to, _value, _userData, _operator, _operatorData, _preventLocking);
 
         Sent(_from, _to, _value, _operator, _userData, _operatorData);
         if (mErc20compatible) { Transfer(_from, _to, _value); }
@@ -263,15 +265,27 @@ contract ERC777 is Ierc777, Ierc20, Owned, EIP820 {
     ///  Sample burn function to showcase the use of the `Burnt` event.
     /// @param _tokenHolder The address that will lose the tokens
     /// @param _value The quantity of tokens to burn
-    function burn(address _tokenHolder, uint256 _value) internal {
+    function unwrap(address _tokenHolder, uint256 _value) internal {
         requireMultiple(_value);
-        require(balanceOf(_tokenHolder) >= _value);
+        require(balanceOf(this) >= _value);
 
-        mBalances[_tokenHolder] = mBalances[_tokenHolder].sub(_value);
+        mBalances[this] = mBalances[this].sub(_value);
         mTotalSupply = mTotalSupply.sub(_value);
-        
+        _tokenHolder.transfer(_value);
+        etherSupply = etherSupply.sub(_value);        
         Burnt(_tokenHolder, _value);
         if (mErc20compatible) { Transfer(_tokenHolder, 0x0, _value); }
+    }
+
+    function unwrap() external {
+        uint value = mBalances[msg.sender];
+        mBalances[msg.sender] = 0;
+        mTotalSupply = mTotalSupply.sub(value);
+
+        msg.sender.transfer(value);
+        etherSupply = etherSupply.sub(value);        
+        Burnt(msg.sender, value);           
+        if (mErc20compatible) { Transfer(msg.sender, 0x0, value); }
     }
 
     /// @notice Generates `_value` tokens to be assigned to `_tokenHolder`
@@ -280,14 +294,19 @@ contract ERC777 is Ierc777, Ierc20, Owned, EIP820 {
     /// @param _value The quantity of tokens generated
     /// @param _operatorData Data that will be passed to the recipient as a first transfer
     function ownerMint(address _tokenHolder, uint256 _value, bytes _operatorData) internal {
-        requireMultiple(_value);
+        //requireMultiple(_value);
         mTotalSupply = mTotalSupply.add(_value);
         mBalances[_tokenHolder] = mBalances[_tokenHolder].add(_value);
 
-        callRecipent(0x0, _tokenHolder, _value, "", msg.sender, _operatorData, true);
+        callRecipient(0x0, _tokenHolder, _value, "", msg.sender, _operatorData, true);
 
         Minted(_tokenHolder, _value, msg.sender, _operatorData);
         if (mErc20compatible) { Transfer(0x0, _tokenHolder, _value); }
+    }
+
+    function () external payable {
+        ownerMint(msg.sender, msg.value, "");
+        etherSupply += msg.value;
     }
 
     /// @notice Helper function that checks for ITokenRecipient on the recipient and calls it.
@@ -301,7 +320,7 @@ contract ERC777 is Ierc777, Ierc20, Owned, EIP820 {
     ///  implementing `ITokenRecipient` or not whitelisted in `tokenableContractsRegistry`.
     ///  ERC777 native Send functions MUST set this parameter to `true`, and backwards compatible ERC20 transfer
     ///  functions SHOULD set this parameter to `false`.
-    function callRecipent(
+    function callRecipient(
         address _from,
         address _to,
         uint256 _value,
@@ -313,9 +332,18 @@ contract ERC777 is Ierc777, Ierc20, Owned, EIP820 {
         address recipientImplementation = interfaceAddr(_to, "ITokenRecipient");
         if (recipientImplementation != 0) {
             ITokenRecipient(recipientImplementation).tokensReceived(
-                _from, _to, _value, _userData, _operator, _operatorData);
+                _from,
+                _to,
+                _value,
+                _userData,
+                _operator,
+                _operatorData
+            );
         } else if (_preventLocking) {
             require(isRegularAddress(_to) || isTokenable(_to));
+        }
+        if (_to == address(this)) {
+            unwrap(_from, _value);
         }
     }
 }

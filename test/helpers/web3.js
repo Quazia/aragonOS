@@ -80,5 +80,14 @@ module.exports = {
         })
       })
     })
+  },
+
+  sendSignedTransaction(rawTx) {
+    return new Promise((resolve, reject) => {
+      web3.eth.sendRawTransaction(rawTx, async (err, res) => {
+        if (err || !res) return reject(err)
+        resolve(res)
+      })
+    })
   }
 }
