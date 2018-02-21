@@ -2,12 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/// @title ERC777 ReferenceToken Contract
-/// @author Jordi Baylina, Jacques Dafflon
-/// @dev This token contract's goal is to give an example implementation
-///  of ERC777 with ERC20 compatible.
-///  This contract does not define any standard, but can be taken as a reference
-///  implementation in case of any ambiguity into the standard
+/// @title ETHWrapper Contract
+/// @author Arthur Lunn Code from: Jordi Baylina, Jacques Dafflon, 
+/// @dev This suggest the methods for a basic implementation of a standardized ETH wrapper.
 
 pragma solidity ^0.4.18; // solhint-disable-line compiler-fixed
 
@@ -44,29 +41,18 @@ contract ETHWrapper is Ierc777, Ierc20, Owned, EIP820 {
         _;
     }
 
-    /// @notice Constructor to create a ReferenceToken
-    /// @param _name Name of the new token
-    /// @param _symbol Symbol of the new token.
-    /// @param _granularity Minimum transferable chunk.
-    /// @param _tokenableContractsRegistry A registry contract with a single method `isTokenable(address contract)`
-    ///  which returns `true` if a specific old `contract` supports holding tokens by default without the need of
-    ///  implementing `ITokenRecipient`. This can be set to `0x0` if the functionality doesn't want to be used.
-    function ReferenceToken(
-        string _name,
-        string _symbol,
-        uint256 _granularity,
-        TokenableContractsRegistry _tokenableContractsRegistry
+    /// @notice Constructor to create a basic Ether wrapper. Constructor takes no functions
+    ///  so as to be deployed dedterministically across networks.
+    function ETHWrapper(
     )
         public
     {
-        mName = _name;
-        mSymbol = _symbol;
+        mName = "WrappedEther";
+        mSymbol = "WETH";
         mTotalSupply = 0;
         mErc20compatible = true;
-        require(_granularity >= 1);
-        mGranularity = _granularity;
+        mGranularity = 1;
 
-        tokenableContractsRegistry = _tokenableContractsRegistry;
         setInterfaceImplementation("Ierc777", this);
         setInterfaceImplementation("Ierc20", this);
     }
@@ -203,24 +189,14 @@ contract ETHWrapper is Ierc777, Ierc20, Owned, EIP820 {
 
     /// @notice Internal function that ensures `_value` is multiple of the granularity
     /// @param _value The quantity that want's to be checked
-    function requireMultiple(uint256 _value) internal {
+    function _requireMultiple(uint256 _value) internal {
         require(_value.div(mGranularity).mul(mGranularity) == _value);
-    }
-
-    /// @notice Helper function to check whether a contract address is registered with the Tokenable Contract Registry
-    ///  to receive tokens.
-    /// @param _addr Address of the contract that has to be checked
-    /// @return `true` if `_addr` is on the whitelist of old contracts accepting tokens without implementing
-    ///  `ITokenRecipient`.
-    function isTokenable(address _addr) internal constant returns(bool) {
-        if (address(tokenableContractsRegistry) == 0x0) return false;
-        return tokenableContractsRegistry.isTokenable(_addr);
     }
 
     /// @notice Check whether an address is a regular address or not.
     /// @param _addr Address of the contract that has to be checked
     /// @return `true` if `_addr` is a regular address (not a contract)
-    function isRegularAddress(address _addr) internal constant returns(bool) {
+    function _isRegularAddress(address _addr) internal constant returns(bool) {
         if (_addr == 0) { return false; }
         uint size;
         assembly { size := extcodesize(_addr) } // solhint-disable-line no-inline-assembly
@@ -248,7 +224,7 @@ contract ETHWrapper is Ierc777, Ierc20, Owned, EIP820 {
     )
         private
     {
-        requireMultiple(_value);
+        _requireMultiple(_value);
         require(_to != address(0));          // forbid sending to 0x0 (=burning)
         require(mBalances[_from] >= _value); // ensure enough funds
 
@@ -261,12 +237,13 @@ contract ETHWrapper is Ierc777, Ierc20, Owned, EIP820 {
         if (mErc20compatible) { Transfer(_from, _to, _value); }
     }
 
-    /// @notice Burns `_value` tokens from `_tokenHolder`
-    ///  Sample burn function to showcase the use of the `Burnt` event.
-    /// @param _tokenHolder The address that will lose the tokens
-    /// @param _value The quantity of tokens to burn
-    function unwrap(address _tokenHolder, uint256 _value) internal {
-        requireMultiple(_value);
+    /// @notice This function is used to handle the unwrapping of tokenized
+    ///  ether. This function should only be called if wrapped eth is sent
+    ///  to this address or if the public `unwrap` function is called.
+    /// @param _tokenHolder The address that will unwrap the tokens
+    /// @param _value The quantity of tokens to unwrap
+    function _unwrap(address _tokenHolder, uint256 _value) internal {
+        _requireMultiple(_value);
         require(balanceOf(this) >= _value);
 
         mBalances[this] = mBalances[this].sub(_value);
@@ -277,6 +254,9 @@ contract ETHWrapper is Ierc777, Ierc20, Owned, EIP820 {
         if (mErc20compatible) { Transfer(_tokenHolder, 0x0, _value); }
     }
 
+    /// @notice This is the publically available unwrap function.
+    ///  when it's called all currently wrapped eth help by this address
+    ///  will be unwraped.
     function unwrap() external {
         uint value = mBalances[msg.sender];
         mBalances[msg.sender] = 0;
@@ -293,8 +273,8 @@ contract ETHWrapper is Ierc777, Ierc20, Owned, EIP820 {
     /// @param _tokenHolder The address that will be assigned the new tokens
     /// @param _value The quantity of tokens generated
     /// @param _operatorData Data that will be passed to the recipient as a first transfer
-    function ownerMint(address _tokenHolder, uint256 _value, bytes _operatorData) internal {
-        //requireMultiple(_value);
+    function _ownerMint(address _tokenHolder, uint256 _value, bytes _operatorData) internal {
+        _requireMultiple(_value);
         mTotalSupply = mTotalSupply.add(_value);
         mBalances[_tokenHolder] = mBalances[_tokenHolder].add(_value);
 
@@ -304,8 +284,9 @@ contract ETHWrapper is Ierc777, Ierc20, Owned, EIP820 {
         if (mErc20compatible) { Transfer(0x0, _tokenHolder, _value); }
     }
 
+    /// @notice default payable allows the user 'wrap' ether by sending ether to the contract.
     function () external payable {
-        ownerMint(msg.sender, msg.value, "");
+        _ownerMint(msg.sender, msg.value, "");
         etherSupply += msg.value;
     }
 
@@ -340,10 +321,10 @@ contract ETHWrapper is Ierc777, Ierc20, Owned, EIP820 {
                 _operatorData
             );
         } else if (_preventLocking) {
-            require(isRegularAddress(_to) || isTokenable(_to));
+            require(_isRegularAddress(_to));
         }
         if (_to == address(this)) {
-            unwrap(_from, _value);
+            _unwrap(_from, _value);
         }
     }
 }
