@@ -8,7 +8,7 @@
 
 pragma solidity ^0.4.18; // solhint-disable-line compiler-fixed
 
-import "../eip820/EIP820.sol";
+import "../eip820/EIP820Implementer.sol";
 import "../Owned.sol";
 import "../zeppelin/math/SafeMath.sol";
 import "./Ierc20.sol";
@@ -16,7 +16,7 @@ import "./Ierc777.sol";
 import "./ITokenRecipient.sol";
 import "./TokenableContractsRegistry.sol";
 
-contract ETHWrapper is Ierc777, Ierc20, Owned, EIP820 {
+contract ETHWrapper is Ierc777, Ierc20, Owned, EIP820Implementer {
     using SafeMath for uint256;
 
     string private mName;
@@ -187,12 +187,6 @@ contract ETHWrapper is Ierc777, Ierc20, Owned, EIP820 {
         doSend(_from, _to, _value, _userData, msg.sender, _operatorData, true);
     }
 
-    /// @notice Internal function that ensures `_value` is multiple of the granularity
-    /// @param _value The quantity that want's to be checked
-    function _requireMultiple(uint256 _value) internal {
-        require(_value.div(mGranularity).mul(mGranularity) == _value);
-    }
-
     /// @notice Check whether an address is a regular address or not.
     /// @param _addr Address of the contract that has to be checked
     /// @return `true` if `_addr` is a regular address (not a contract)
@@ -224,7 +218,6 @@ contract ETHWrapper is Ierc777, Ierc20, Owned, EIP820 {
     )
         private
     {
-        _requireMultiple(_value);
         require(_to != address(0));          // forbid sending to 0x0 (=burning)
         require(mBalances[_from] >= _value); // ensure enough funds
 
@@ -243,7 +236,6 @@ contract ETHWrapper is Ierc777, Ierc20, Owned, EIP820 {
     /// @param _tokenHolder The address that will unwrap the tokens
     /// @param _value The quantity of tokens to unwrap
     function _unwrap(address _tokenHolder, uint256 _value) internal {
-        _requireMultiple(_value);
         require(balanceOf(this) >= _value);
 
         mBalances[this] = mBalances[this].sub(_value);
@@ -274,7 +266,6 @@ contract ETHWrapper is Ierc777, Ierc20, Owned, EIP820 {
     /// @param _value The quantity of tokens generated
     /// @param _operatorData Data that will be passed to the recipient as a first transfer
     function _ownerMint(address _tokenHolder, uint256 _value, bytes _operatorData) internal {
-        _requireMultiple(_value);
         mTotalSupply = mTotalSupply.add(_value);
         mBalances[_tokenHolder] = mBalances[_tokenHolder].add(_value);
 
@@ -287,7 +278,7 @@ contract ETHWrapper is Ierc777, Ierc20, Owned, EIP820 {
     /// @notice default payable allows the user 'wrap' ether by sending ether to the contract.
     function () external payable {
         _ownerMint(msg.sender, msg.value, "");
-        etherSupply += msg.value;
+        etherSupply = etherSupply.add(msg.value);
     }
 
     /// @notice Helper function that checks for ITokenRecipient on the recipient and calls it.
@@ -311,7 +302,7 @@ contract ETHWrapper is Ierc777, Ierc20, Owned, EIP820 {
         bool _preventLocking
     ) private {
         address recipientImplementation = interfaceAddr(_to, "ITokenRecipient");
-        if (recipientImplementation != 0) {
+        if (recipientImplementation != address(0x0)) {
             ITokenRecipient(recipientImplementation).tokensReceived(
                 _from,
                 _to,
